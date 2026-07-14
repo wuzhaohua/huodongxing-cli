@@ -1,4 +1,4 @@
 interface:
   display_name: "活动行 CLI"
-  short_description: "安全搜索活动行活动、读取结构化详情、推荐、报名预检与后台路由"
-  default_prompt: "使用 $huodongxing-cli 搜索活动行活动并给出结构化结果和安全的下一步建议。"
+  short_description: "严格筛选活动、脱敏读取登录态后台并生成安全操作计划"
+  default_prompt: "使用 $huodongxing-cli 完成活动行搜索或后台任务，严格校验结果并遵守写操作安全门。"

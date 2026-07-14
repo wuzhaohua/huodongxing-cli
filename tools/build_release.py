@@ -14,7 +14,7 @@ from typing import Dict, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "2.2.0"
+VERSION = "3.0.0"
 DIST = ROOT / "dist"
 CLAUDE_SKILL = ROOT / "skills" / "huodongxing-cli"
 CANONICAL_FILES = (
@@ -22,12 +22,16 @@ CANONICAL_FILES = (
     "agents/openai.yaml",
     "scripts/hdx",
     "scripts/hdx.py",
+    "scripts/hdx_browser.py",
     "references/agent-adapters.md",
+    "references/browser-bridge.md",
     "references/cli-reference.md",
     "references/data-model.md",
+    "references/event-draft.md",
     "references/platform-map.md",
     "references/profile.example.json",
     "references/policy.example.json",
+    "references/signup.example.json",
     "references/recommendation-framework.md",
     "references/registration-policy.md",
     "references/safety.md",
@@ -102,7 +106,10 @@ def build() -> None:
     write_zip(DIST / ("hdx-cli-%s.zip" % VERSION), (
         (ROOT / "scripts/hdx", "hdx"),
         (ROOT / "scripts/hdx.py", "hdx.py"),
+        (ROOT / "scripts/hdx_browser.py", "hdx_browser.py"),
         (ROOT / "references/cli-reference.md", "cli-reference.md"),
+        (ROOT / "references/browser-bridge.md", "browser-bridge.md"),
+        (ROOT / "references/event-draft.md", "event-draft.md"),
         (ROOT / "LICENSE", "LICENSE"),
     ))
     write_zip(

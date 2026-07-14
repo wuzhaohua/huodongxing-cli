@@ -8,7 +8,7 @@
     {
       "name": "huodongxing",
       "source": "./",
-      "description": "活动行安全 CLI 与 Agent Skill。",
+      "description": "活动行公开数据、登录态读取与安全运营控制面的多 Agent Skill。",
       "category": "productivity",
       "tags": [
         "events",
