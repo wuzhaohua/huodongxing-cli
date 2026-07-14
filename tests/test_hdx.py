@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import argparse
+import contextlib
+import csv
+import io
 import importlib.util
 import json
 import pathlib
 import sys
+import tempfile
 import unittest
 
 
-MODULE_PATH = pathlib.Path(__file__).with_name("hdx.py")
+MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "hdx.py"
 SPEC = importlib.util.spec_from_file_location("hdx", MODULE_PATH)
 hdx = importlib.util.module_from_spec(SPEC)
 sys.modules["hdx"] = hdx
@@ -61,6 +65,59 @@ class HdxTests(unittest.TestCase):
 
     def test_signup_is_commit(self):
         self.assertTrue(hdx.ACTIONS["signup"]["risk"] == "commit")
+
+    def test_default_profile_is_neutral(self):
+        self.assertEqual(hdx.load_profile(None), {
+            "interests": [], "preferred_cities": [], "business_goals": []
+        })
+
+    def test_search_defaults_to_all_cities(self):
+        parser = hdx.build_parser()
+        args = parser.parse_args(["search"])
+        self.assertEqual(args.city, "全国")
+        self.assertNotIn("city=", hdx.build_search_url(args))
+
+    def test_positive_integer_options(self):
+        parser = hdx.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["search", "--limit", "0"])
+        self.assertEqual(parser.parse_args(["search", "--limit", "2"]).limit, 2)
+
+    def test_search_csv_outputs_one_event_per_row(self):
+        payload = {
+            "source_url": "https://example.test/events",
+            "count": 2,
+            "events": [
+                {"id": "1", "title": "活动一"},
+                {"id": "2", "title": "活动二", "location": "线上"},
+            ],
+        }
+        rows = list(csv.DictReader(io.StringIO(hdx.render(payload, "csv"))))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["id"], "1")
+        self.assertEqual(rows[1]["location"], "线上")
+
+    def test_open_route_print_only_does_not_launch_browser(self):
+        parser = hdx.build_parser()
+        args = parser.parse_args(["open-route", "event-overview", "--event", "2856433093123", "--print-only"])
+        self.assertTrue(args.print_only)
+
+    def test_search_date_validation(self):
+        parser = hdx.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parser.parse_args(["search", "--from", "2026/07/14", "--to", "2026-07-15"])
+        args = parser.parse_args(["search", "--from", "2026-07-16", "--to", "2026-07-15"])
+        with self.assertRaises(hdx.HdxError):
+            hdx.build_search_url(args)
+
+    def test_profile_shape_validation(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8") as handle:
+            json.dump({"interests": "AI"}, handle, ensure_ascii=False)
+            handle.flush()
+            with self.assertRaises(hdx.HdxError):
+                hdx.load_profile(handle.name)
 
 
 if __name__ == "__main__":
