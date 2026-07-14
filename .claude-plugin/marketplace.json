@@ -1,0 +1,20 @@
+{
+  "name": "wuzhaohua-tools",
+  "description": "Wu Zhaohua 发布的 Agent 工具与 Skills。",
+  "owner": {
+    "name": "Wu Zhaohua"
+  },
+  "plugins": [
+    {
+      "name": "huodongxing",
+      "source": "./",
+      "description": "活动行安全 CLI 与 Agent Skill。",
+      "category": "productivity",
+      "tags": [
+        "events",
+        "automation",
+        "china"
+      ]
+    }
+  ]
+}
