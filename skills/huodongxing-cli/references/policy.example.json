@@ -1,0 +1,10 @@
+{
+  "free_events": "ask",
+  "paid_events": "notify_only",
+  "requires_review": "ask",
+  "real_name": "ask",
+  "wechat_required": "ask",
+  "identity_document": "deny",
+  "marketing_risk": "skip",
+  "verify_after_submit": true
+}

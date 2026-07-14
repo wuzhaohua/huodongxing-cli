@@ -12,7 +12,7 @@
 
 ## OpenClaw
 
-- 从 Git 安装：`openclaw skills install git:wuzhaohua/huodongxing-cli@v2.1.0`。
+- 从 Git 安装：`openclaw skills install git:wuzhaohua/huodongxing-cli@v2.2.0`。
 - 使用工作区可用的浏览器 Skill 或浏览器工具处理登录态页面。
 - 用 `openclaw skills info huodongxing-cli` 和 `openclaw skills check` 验证加载状态。
 - OpenClaw 不会扫描 Codex 的 `$CODEX_HOME/skills`；需要分别安装或使用 OpenClaw 迁移命令。

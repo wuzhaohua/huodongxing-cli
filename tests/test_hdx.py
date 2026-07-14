@@ -67,9 +67,16 @@ class HdxTests(unittest.TestCase):
         self.assertTrue(hdx.ACTIONS["signup"]["risk"] == "commit")
 
     def test_default_profile_is_neutral(self):
-        self.assertEqual(hdx.load_profile(None), {
-            "interests": [], "preferred_cities": [], "business_goals": []
-        })
+        with tempfile.TemporaryDirectory() as folder:
+            old = hdx.DEFAULT_CONFIG_DIR
+            hdx.DEFAULT_CONFIG_DIR = pathlib.Path(folder)
+            try:
+                profile = hdx.load_profile(None)
+            finally:
+                hdx.DEFAULT_CONFIG_DIR = old
+        self.assertEqual(profile["interests"], [])
+        self.assertEqual(profile["business_goals"], [])
+        self.assertIsNone(profile["max_travel_minutes"])
 
     def test_search_defaults_to_all_cities(self):
         parser = hdx.build_parser()
@@ -118,6 +125,32 @@ class HdxTests(unittest.TestCase):
             handle.flush()
             with self.assertRaises(hdx.HdxError):
                 hdx.load_profile(handle.name)
+
+    def test_business_goal_affects_recommendation(self):
+        event = {"title": "企业客户拓展沙龙", "summary": "合作伙伴交流", "tags": [],
+                 "organizers": [], "city": "杭州", "capacity": 50,
+                 "start": "2026-07-20T10:00:00+08:00", "registration_fields": []}
+        profile = {"interests": [], "preferred_cities": ["杭州"],
+                   "business_goals": ["客户拓展", "合作伙伴"], "excluded_topics": []}
+        scored = hdx.recommendation_score(event, profile)
+        self.assertGreater(scored["dimensions"]["business_goal"], 0)
+
+    def test_marketing_risk_penalizes_score(self):
+        profile = {"interests": [], "preferred_cities": [], "business_goals": [], "excluded_topics": []}
+        safe = {"title": "AI 技术峰会", "summary": "技术交流", "tags": [], "organizers": [],
+                "city": "杭州", "capacity": 50, "start": "2026-07-20T10:00:00+08:00",
+                "registration_fields": []}
+        risky = {**safe, "title": "AI 合伙人招募搞钱训练营"}
+        self.assertLess(hdx.recommendation_score(risky, profile)["score"],
+                        hdx.recommendation_score(safe, profile)["score"])
+
+    def test_policy_defaults_and_local_override(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8") as handle:
+            json.dump({"free_events": "auto_submit_if_safe", "paid_events": "notify_only"}, handle)
+            handle.flush()
+            policy = hdx.load_policy(handle.name)
+        self.assertEqual(policy["free_events"], "auto_submit_if_safe")
+        self.assertEqual(policy["paid_events"], "notify_only")
 
 
 if __name__ == "__main__":

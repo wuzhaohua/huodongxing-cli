@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.0 - 2026-07-14
+
+- Added persistent local profile and registration policy outside the Skill directory.
+- Added business-goal scoring, marketing/exclusion risk penalties and confidence output.
+- Added policy-aware signup plans for free, paid, review, real-name and WeChat cases.
+- Parallelized recommendation detail enrichment.
+- Added reusable weekly, monthly, multi-city and signup workflow templates.
+
 ## 2.1.0 - 2026-07-14
 
 - Add OpenClaw, OpenAI Codex, Claude Code, and generic Agent Skill packaging.

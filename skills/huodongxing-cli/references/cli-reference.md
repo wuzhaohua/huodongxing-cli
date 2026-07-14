@@ -1,4 +1,4 @@
-# hdx 2.1 命令参考
+# hdx 2.2 命令参考
 
 ## 安装和诊断
 
@@ -49,10 +49,14 @@ scripts/hdx detail EVENT_ID
 scripts/hdx detail 'https://www.huodongxing.com/event/EVENT_ID' --format markdown
 scripts/hdx recommend --city 杭州 -q AI --time month --limit 5
 scripts/hdx recommend --city 全国 -q Agent --profile profile.json
-scripts/hdx signup-plan EVENT_ID
+scripts/hdx signup-plan EVENT_ID --profile profile.json --policy policy.json
 ```
 
-`profile.json` 必须是 JSON 对象；`interests`、`preferred_cities`、`business_goals` 都是字符串数组。未提供的字段按空数组处理。
+未显式传入时，CLI 会从 `~/.config/hdx/profile.json` 和 `~/.config/hdx/policy.json` 读取本地配置。可使用 `HDX_CONFIG_DIR`、`HDX_PROFILE`、`HDX_POLICY` 覆盖路径。个人配置必须位于 Skill 和 Git 仓库之外。
+
+`recommend --workers N` 控制详情并发数，默认 4。画像支持兴趣、城市、业务目标、形式、活动类型、排除主题、时间偏好和最大出行时长。
+
+`signup-plan` 输出 `risk_flags`、`policy_decision`、`requires_confirmation` 和 `verify_after_submit`，但永不点击提交。
 
 详情输出包括时间、地址、价格区间、票种、余量、审核、实名、隐藏地址、报名字段和主办方。`signup-plan` 永不提交。
 

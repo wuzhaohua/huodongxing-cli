@@ -9,6 +9,7 @@ and routes; the final browser action requires explicit confirmation.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import csv
 import html
 import io
@@ -29,7 +30,8 @@ from typing import Any, Dict, List, Optional
 
 
 BASE_URL = "https://www.huodongxing.com"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
+DEFAULT_CONFIG_DIR = Path(os.environ.get("HDX_CONFIG_DIR", "~/.config/hdx")).expanduser()
 DEFAULT_TIMEOUT = 25
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -300,25 +302,85 @@ def detail_data(event_id: str) -> Dict[str, Any]:
     }
 
 
+def load_json_config(path: Optional[str], env_name: str, default_name: str) -> Dict[str, Any]:
+    selected = path or os.environ.get(env_name)
+    candidate = Path(selected).expanduser() if selected else DEFAULT_CONFIG_DIR / default_name
+    if not candidate.exists():
+        return {}
+    with candidate.open(encoding="utf-8") as handle:
+        supplied = json.load(handle)
+    if not isinstance(supplied, dict):
+        raise HdxError("配置必须是 JSON 对象: %s" % candidate)
+    return supplied
+
+
 def load_profile(path: Optional[str]) -> Dict[str, Any]:
-    profile = {"interests": [], "preferred_cities": [], "business_goals": []}
-    if path:
-        with open(path, encoding="utf-8") as handle:
-            supplied = json.load(handle)
-        if not isinstance(supplied, dict):
-            raise HdxError("profile 必须是 JSON 对象")
-        for key in profile:
-            value = supplied.get(key, profile[key])
-            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-                raise HdxError("profile.%s 必须是字符串数组" % key)
-            profile[key] = value
+    profile = {
+        "interests": [], "preferred_cities": [], "business_goals": [],
+        "preferred_formats": [], "preferred_event_types": [], "excluded_topics": [],
+        "time_preferences": [], "max_travel_minutes": None,
+    }
+    supplied = load_json_config(path, "HDX_PROFILE", "profile.json")
+    for key in profile:
+        value = supplied.get(key, profile[key])
+        if key == "max_travel_minutes":
+            if value is not None and (not isinstance(value, int) or value < 0):
+                raise HdxError("profile.max_travel_minutes 必须是非负整数或 null")
+        elif not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise HdxError("profile.%s 必须是字符串数组" % key)
+        profile[key] = value
     return profile
+
+
+def load_policy(path: Optional[str]) -> Dict[str, Any]:
+    policy = {
+        "free_events": "ask", "paid_events": "ask", "requires_review": "ask",
+        "real_name": "ask", "wechat_required": "ask", "identity_document": "deny",
+        "marketing_risk": "skip", "verify_after_submit": True,
+    }
+    supplied = load_json_config(path, "HDX_POLICY", "policy.json")
+    policy.update({k: v for k, v in supplied.items() if k in policy})
+    allowed = {"ask", "notify_only", "auto_submit_if_safe", "skip", "deny"}
+    for key in ("free_events", "paid_events", "requires_review", "real_name", "wechat_required", "identity_document", "marketing_risk"):
+        if policy[key] not in allowed:
+            raise HdxError("policy.%s 的值无效" % key)
+    if not isinstance(policy["verify_after_submit"], bool):
+        raise HdxError("policy.verify_after_submit 必须是布尔值")
+    return policy
+
+
+MARKETING_TERMS = ("合伙人招募", "招商", "加盟", "赚钱", "搞钱", "流量变现", "课程", "训练营", "token中转", "算力中转")
+IDENTITY_TERMS = ("身份证", "证件号", "护照")
+
+
+def event_risks(event: Dict[str, Any], profile: Dict[str, Any]) -> List[str]:
+    text = " ".join(str(event.get(k) or "") for k in ("title", "summary", "tags")).lower()
+    risks = []
+    if any(term.lower() in text for term in MARKETING_TERMS):
+        risks.append("marketing_risk")
+    excluded = [x for x in profile.get("excluded_topics", []) if x.lower() in text]
+    if excluded:
+        risks.append("excluded_topic")
+    fields = " ".join(str(x.get("title") or "") for x in event.get("registration_fields", []))
+    if any(term in fields for term in IDENTITY_TERMS):
+        risks.append("identity_document")
+    if event.get("requires_real_name"):
+        risks.append("real_name")
+    if event.get("requires_review"):
+        risks.append("requires_review")
+    if event.get("wechat_only") or "微信" in fields:
+        risks.append("wechat_required")
+    if not event.get("is_free"):
+        risks.append("paid")
+    return list(dict.fromkeys(risks))
 
 
 def recommendation_score(event: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
     text = " ".join(str(event.get(k) or "") for k in ("title", "summary", "tags"))
     hits = [x for x in profile.get("interests", []) if x.lower() in text.lower()]
-    topic = min(40, 12 + len(hits) * 7) if hits else 5
+    goal_hits = [x for x in profile.get("business_goals", []) if x.lower() in text.lower()]
+    topic = min(32, 10 + len(hits) * 7) if hits else 4
+    goal_score = min(16, len(goal_hits) * 5)
     organizer = (event.get("organizers") or [{}])[0]
     followers = int(organizer.get("followers") or 0)
     org_score = 20 if followers >= 30000 else 16 if followers >= 10000 else 12 if followers >= 1000 else 7
@@ -332,7 +394,10 @@ def recommendation_score(event: Dict[str, Any], profile: Dict[str, Any]) -> Dict
         time_score = 15 if 0 <= days <= 5 else 10 if 6 <= days <= 9 else 8 if 10 <= days <= 14 else 5
     except (TypeError, ValueError, KeyError):
         pass
-    total = max(0, min(100, topic + org_score + location + scale + time_score))
+    risks = event_risks(event, profile)
+    penalty = 18 if "marketing_risk" in risks else 0
+    penalty += 30 if "excluded_topic" in risks else 0
+    total = max(0, min(100, topic + goal_score + org_score + location + scale + time_score - penalty))
     level = "S" if total >= 80 else "A" if total >= 60 else "B" if total >= 40 else "C" if total >= 20 else "D"
     reasons = (["主题匹配：" + "、".join(hits[:4])] if hits else [])
     if followers:
@@ -343,9 +408,15 @@ def recommendation_score(event: Dict[str, Any], profile: Dict[str, Any]) -> Dict
         reasons.append("免费活动")
     if event.get("requires_review"):
         reasons.append("报名需要审核")
+    if goal_hits:
+        reasons.append("业务目标匹配：" + "、".join(goal_hits[:3]))
+    if penalty:
+        reasons.append("风险扣分：" + "、".join(risks))
     return {"score": total, "level": level, "reasons": reasons,
             "dimensions": {"topic": topic, "organizer": org_score, "time": time_score,
-                           "location": location, "scale": scale}}
+                           "location": location, "scale": scale, "business_goal": goal_score,
+                           "risk_penalty": penalty}, "risks": risks,
+            "confidence": "high" if event.get("summary") and event.get("organizers") else "medium"}
 
 
 def route_url(name: str, event: Optional[str] = None) -> str:
@@ -415,6 +486,12 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         checks["network"]["error"] = str(exc)
     checks["ready_public"] = checks["python"]["ok"] and checks["network"]["ok"]
     checks["ready_browser_routing"] = checks["browser_command"]["ok"]
+    checks["local_config"] = {
+        "directory": str(DEFAULT_CONFIG_DIR),
+        "profile": (DEFAULT_CONFIG_DIR / "profile.json").exists(),
+        "policy": (DEFAULT_CONFIG_DIR / "policy.json").exists(),
+        "signup": (DEFAULT_CONFIG_DIR / "signup.json").exists(),
+    }
     output(checks, args)
 
 
@@ -439,19 +516,23 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     url = build_search_url(args)
     summaries = parse_search(fetch(url))[:args.limit]
     profile, results = load_profile(args.profile), []
-    for summary in summaries:
+    def enrich(summary: EventSummary) -> Dict[str, Any]:
         try:
             event = detail_data(summary.id)
             event["recommendation"] = recommendation_score(event, profile)
-            results.append(event)
+            return event
         except HdxError as exc:
-            results.append({**asdict(summary), "error": str(exc), "recommendation": {"score": 0, "level": "D", "reasons": ["详情获取失败"]}})
+            return {**asdict(summary), "error": str(exc), "recommendation": {"score": 0, "level": "D", "reasons": ["详情获取失败"], "risks": ["detail_unverified"], "confidence": "low"}}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.workers, len(summaries) or 1)) as pool:
+        results = list(pool.map(enrich, summaries))
     results.sort(key=lambda x: x["recommendation"]["score"], reverse=True)
     output({"source_url": url, "count": len(results), "events": results}, args)
 
 
 def cmd_signup_plan(args: argparse.Namespace) -> None:
     event = detail_data(normalize_event_id(args.event))
+    profile, policy = load_profile(args.profile), load_policy(args.policy)
+    risks = event_risks(event, profile)
     blockers = []
     if event["wechat_only"]:
         blockers.append("仅支持微信流程")
@@ -461,11 +542,28 @@ def cmd_signup_plan(args: argparse.Namespace) -> None:
         blockers.append("提交后需主办方审核")
     if not event["is_free"]:
         blockers.append("收费活动，付款前必须单独确认")
+    decision = "ask"
+    if "identity_document" in risks or "excluded_topic" in risks:
+        decision = "deny"
+    elif "marketing_risk" in risks:
+        decision = policy["marketing_risk"]
+    elif "paid" in risks:
+        decision = policy["paid_events"]
+    elif "real_name" in risks:
+        decision = policy["real_name"]
+    elif "wechat_required" in risks:
+        decision = policy["wechat_required"]
+    elif "requires_review" in risks:
+        decision = policy["requires_review"]
+    else:
+        decision = policy["free_events"]
     output({"event": {k: event[k] for k in ("id", "title", "url", "start", "address", "is_free", "price")},
             "tickets": event["tickets"], "required_fields": [f for f in event["registration_fields"] if f["required"]],
-            "all_fields": event["registration_fields"], "blockers": blockers,
-            "risk": "commit", "requires_confirmation": True,
-            "next_action": "确认票种、字段、费用和审核状态；获得明确授权后再在浏览器提交。"}, args)
+            "all_fields": event["registration_fields"], "blockers": blockers, "risk_flags": risks,
+            "policy_decision": decision, "risk": "commit",
+            "requires_confirmation": decision not in ("auto_submit_if_safe",),
+            "verify_after_submit": policy["verify_after_submit"],
+            "next_action": "按本地 policy 决策；浏览器提交前刷新字段和票价，提交后验证成功页、订单、电子票或待审核状态。"}, args)
 
 
 def cmd_open_route(args: argparse.Namespace) -> None:
@@ -535,8 +633,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("routes"); p.add_argument("--domain"); add_output_options(p); p.set_defaults(func=cmd_routes)
     p = sub.add_parser("search"); add_search_options(p); add_output_options(p); p.set_defaults(func=cmd_search)
     p = sub.add_parser("detail"); p.add_argument("event"); add_output_options(p); p.set_defaults(func=cmd_detail)
-    p = sub.add_parser("recommend"); add_search_options(p); p.add_argument("--profile"); add_output_options(p); p.set_defaults(func=cmd_recommend)
-    p = sub.add_parser("signup-plan"); p.add_argument("event"); add_output_options(p); p.set_defaults(func=cmd_signup_plan)
+    p = sub.add_parser("recommend"); add_search_options(p); p.add_argument("--profile"); p.add_argument("--workers", type=positive_int, default=4); add_output_options(p); p.set_defaults(func=cmd_recommend)
+    p = sub.add_parser("signup-plan"); p.add_argument("event"); p.add_argument("--profile"); p.add_argument("--policy"); add_output_options(p); p.set_defaults(func=cmd_signup_plan)
     p = sub.add_parser("open-route"); p.add_argument("route", choices=tuple(ROUTES)); p.add_argument("--event");
     p.add_argument("--print-only", action="store_true", help="只输出 URL，不调用系统浏览器")
     p.set_defaults(func=cmd_open_route)

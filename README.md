@@ -2,16 +2,17 @@
 
 [English summary](#english-summary)
 
-这是一个面向 [活动行](https://www.huodongxing.com) 的安全、无凭据 CLI 和 Agent Skill。当前版本为 **v2.1.0**，支持 OpenClaw、OpenAI Codex、Claude Code，以及兼容 `SKILL.md` 的通用 Agent。
+这是一个面向 [活动行](https://www.huodongxing.com) 的安全、无凭据 CLI 和 Agent Skill。当前版本为 **v2.2.0**，支持 OpenClaw、OpenAI Codex、Claude Code，以及兼容 `SKILL.md` 的通用 Agent。
 
-项目不是活动行官方 SDK，也不调用未公开的私人写入接口。公开活动使用 HTTP 读取；登录态页面只解析精确路由；报名、发布、退款、群发、支付等操作必须经过用户对本次动作的明确确认，并由真实浏览器完成最终提交。
+项目不是活动行官方 SDK，也不调用未公开的私人写入接口。公开活动使用 HTTP 读取；登录态页面只解析精确路由；报名可按用户本地持久策略分流，发布、退款、群发、支付等高风险操作仍必须逐次确认，并由真实浏览器完成最终提交。
 
 ## 主要能力
 
 - 搜索活动并按城市、时间、价格、线上/线下、认证和排序筛选。
 - 读取活动详情、票种、价格、报名字段、实名与审核要求。
 - 根据用户提供的偏好文件生成可解释推荐分数。
-- 在报名之前输出字段、费用和风险预检，永不自动提交。
+- 在报名之前输出字段、费用、风险和本地策略决策；CLI 本身永不点击提交。
+- 将个人画像、自动报名策略和报名资料保存在 Skill 外部，升级与公开发布都不会覆盖或携带个人数据。
 - 解析票券、主办方后台、名单、营销、财务和账号页面的精确路由。
 - 输出 JSON、逐行 CSV 或 Markdown，适合 Agent 和自动化流程。
 - 对外部写入、个人数据和资金动作执行统一安全门。
@@ -22,7 +23,7 @@
 
 ### 独立 CLI
 
-从 [GitHub Releases](https://github.com/wuzhaohua/huodongxing-cli/releases) 下载 `hdx-cli-2.1.0.zip`，解压后运行：
+从 [GitHub Releases](https://github.com/wuzhaohua/huodongxing-cli/releases) 下载 `hdx-cli-2.2.0.zip`，解压后运行：
 
 ```bash
 chmod +x hdx hdx.py
@@ -43,19 +44,19 @@ scripts/hdx doctor
 仓库根目录本身就是可安装 Skill：
 
 ```bash
-openclaw skills install git:wuzhaohua/huodongxing-cli@v2.1.0
+openclaw skills install git:wuzhaohua/huodongxing-cli@v2.2.0
 openclaw skills info huodongxing-cli
 ```
 
 安装到所有本地 Agent：
 
 ```bash
-openclaw skills install git:wuzhaohua/huodongxing-cli@v2.1.0 --global
+openclaw skills install git:wuzhaohua/huodongxing-cli@v2.2.0 --global
 ```
 
 ### OpenAI Codex
 
-下载 `huodongxing-codex-skill-2.1.0.zip`，将其中的 `huodongxing-cli` 目录放入：
+下载 `huodongxing-codex-skill-2.2.0.zip`，将其中的 `huodongxing-cli` 目录放入：
 
 ```text
 ~/.codex/skills/huodongxing-cli
@@ -79,7 +80,7 @@ openclaw skills install git:wuzhaohua/huodongxing-cli@v2.1.0 --global
 /huodongxing:huodongxing-cli
 ```
 
-也可以下载 `huodongxing-claude-code-plugin-2.1.0.zip`，解压后使用 `claude --plugin-dir <目录>` 本地加载。
+也可以下载 `huodongxing-claude-code-plugin-2.2.0.zip`，解压后使用 `claude --plugin-dir <目录>` 本地加载。
 
 ## 快速使用
 

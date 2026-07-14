@@ -1,5 +1,10 @@
 {
-  "interests": ["示例兴趣一", "示例兴趣二"],
-  "preferred_cities": ["示例城市一", "示例城市二"],
-  "business_goals": ["示例目标一", "示例目标二"]
+  "interests": ["AI", "Agent", "互联网"],
+  "preferred_cities": ["杭州", "上海"],
+  "business_goals": ["客户拓展", "合作伙伴", "AI学习"],
+  "preferred_formats": ["offline"],
+  "preferred_event_types": ["大会", "闭门会", "沙龙"],
+  "excluded_topics": ["招商加盟", "币圈"],
+  "time_preferences": ["工作日晚上", "周末"],
+  "max_travel_minutes": 180
 }

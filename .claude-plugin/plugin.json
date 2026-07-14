@@ -1,7 +1,7 @@
 {
   "name": "huodongxing",
   "description": "安全搜索活动行活动、读取结构化详情、生成推荐和报名预检，并解析主办方登录态路由。",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": {
     "name": "Wu Zhaohua"
   },
