@@ -5,6 +5,6 @@
   "preferred_formats": ["offline"],
   "preferred_event_types": ["大会", "闭门会", "沙龙"],
   "excluded_topics": ["招商加盟", "币圈"],
-  "time_preferences": ["工作日晚上", "周末"],
+  "time_preferences": ["工作日", "晚上", "周末"],
   "max_travel_minutes": 180
 }

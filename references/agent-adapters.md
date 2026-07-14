@@ -1,36 +1,41 @@
 # Agent 适配说明
 
-## 共同执行模型
+## 共同模型
 
-所有 Agent 都使用 `scripts/hdx` 作为确定性控制面：
+三种 Agent 共享完整 Skill 正文和 `scripts/hdx`：
 
-1. `search`、`detail`、`recommend`、`signup-plan` 直接读取公开数据。
-2. `open-route --print-only` 只返回登录态页面 URL。
-3. Agent 有浏览器工具时，在用户已有登录态中打开该 URL；没有浏览器工具时，只返回 URL 并说明未读取页面。
-4. 写操作先运行 `action-plan`，获得用户对本次准确对象和范围的明确确认后，才允许浏览器执行最终动作。
-5. 提交后必须回读结果；没有证据时状态为“未知”。
+1. 公开读取由 Python CLI 执行。
+2. 登录态读取统一连接 `web-access` 的本机 CDP 代理；Cookie 永远留在 Chrome。
+3. `open-route --print-only` 是 CDP 不可用时的只读降级。
+4. 写操作统一经过 `signup-plan`、`event-draft plan` 或 `action-plan`，最终由真实浏览器确认和验收。
+5. 工具缺失时报告缺口，不把其他 Agent 的工具名当作当前能力。
+
+## 本机统一 Skill 系统
+
+本机以 `~/.agents/skills/huodongxing-cli` 为唯一活动主源。Codex 和 Claude Code 的个人 Skill 入口应链接到该目录；OpenClaw 原生读取共享主库。修改时遵守 `shared-skill-system` 的锁、快照、验证和经验记录流程。
+
+公开发行包仍分别提供 OpenClaw、Codex 和 Claude Code 的标准安装结构；它们的正文由同一规范源构建。
 
 ## OpenClaw
 
-- 从 Git 安装：`openclaw skills install git:wuzhaohua/huodongxing-cli@v2.2.0`。
-- 使用工作区可用的浏览器 Skill 或浏览器工具处理登录态页面。
-- 用 `openclaw skills info huodongxing-cli` 和 `openclaw skills check` 验证加载状态。
-- OpenClaw 不会扫描 Codex 的 `$CODEX_HOME/skills`；需要分别安装或使用 OpenClaw 迁移命令。
+- 安装：`openclaw skills install git:wuzhaohua/huodongxing-cli@v3.0.0 --global`。
+- 验证：`openclaw skills info huodongxing-cli` 和 `openclaw skills check`。
+- 登录态：先加载共享 `web-access`，再运行 `scripts/hdx auth-status`。
+- 不再从旧 `huodongxing` Skill 读取账号密码或个人档案；旧名称只作为兼容别名。
 
 ## OpenAI Codex
 
-- 个人安装目录：`~/.codex/skills/huodongxing-cli`。
-- 项目安装目录：`.agents/skills/huodongxing-cli`。
-- `agents/openai.yaml` 只提供 Codex UI 元数据，不改变 CLI 权限。
-- 若当前 Codex 没有可用浏览器工具，使用 `--print-only` 返回路由，不尝试读取用户浏览器状态。
+- 个人入口：`~/.codex/skills/huodongxing-cli`。
+- 项目入口：`.agents/skills/huodongxing-cli`。
+- `agents/openai.yaml` 只提供 UI 元数据，不增加权限。
+- 当前会话若尚未发现新版本，启动新任务或重新加载 Skill 列表。
 
 ## Claude Code
 
-- 插件技能位于 `skills/huodongxing-cli/SKILL.md`。
-- 市场安装后命令为 `/huodongxing:huodongxing-cli`。
-- 插件缓存只包含插件目录内文件，因此脚本和 references 必须与 Skill 一起打包。
-- 本地验证运行 `claude plugin validate . --strict`；本地试用可运行 `claude --plugin-dir <repo>`。
+- 插件市场：`/plugin marketplace add wuzhaohua/huodongxing-cli`，再安装 `huodongxing@wuzhaohua-tools`。
+- 显式调用：`/huodongxing:huodongxing-cli`。
+- 插件包包含 Skill、CLI、浏览器桥和 references；用 `claude plugin validate . --strict` 验证。
 
 ## 通用 Agent Skills 客户端
 
-将完整 `huodongxing-cli` 文件夹放入客户端支持的 Skills 根目录。必须保留 `SKILL.md`、`scripts/` 和 `references/` 的相对结构。若客户端不提供 shell 执行或 Python 3.9+，它只能读取说明，不能运行 CLI。
+保留 `SKILL.md`、`agents/`、`scripts/` 和 `references/` 相对结构。需要 Python 3.9+ 才能运行公开 CLI；需要兼容的本机 CDP 代理才能运行登录态命令。缺少这些依赖时仍可读取方法和路由，但不能声称执行成功。
